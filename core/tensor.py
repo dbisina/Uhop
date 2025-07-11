@@ -18,12 +18,12 @@ class Tensor:
     def cpu(self):
         if self.device == 'cpu':
             return self
-        return Tensor(np.array(self.data.get()), device='cpu')
+        return Tensor(self.data.get(), device='cpu')
 
     def gpu(self):
         if self.device == 'gpu':
             return self
-        return Tensor(gpuarray.to_gpu(np.array(self.data)), device='gpu')
+        return Tensor(gpuarray.to_gpu(self.data), device='gpu')
 
     def __repr__(self):
         return f"Tensor(shape={self.shape}, device='{self.device}')"
