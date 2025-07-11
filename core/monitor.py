@@ -1,39 +1,57 @@
+# uhop/core/monitor.py
 import time
+import psutil
+import numpy as np
 from collections import defaultdict
 from .tensor import Tensor
-
 
 class PerformanceMonitor:
     def __init__(self):
         self.records = defaultdict(list)
         self.enabled = True
+        self.memory_usage = []
+        self.flop_counts = {}
     
-    def record(self, operation, backend, duration):
+    def record(self, operation, backend, duration, memory=None, flops=None):
         if self.enabled:
-            self.records[(operation, backend)].append(duration)
+            record = {
+                "duration": duration,
+                "memory": memory or psutil.Process().memory_info().rss / 1024**2,
+                "timestamp": time.time()
+            }
+            
+            if flops:
+                record["flops"] = flops
+                self.flop_counts[(operation, backend)] = flops
+                
+            self.records[(operation, backend)].append(record)
     
     def get_stats(self, operation, backend):
-        durations = self.records.get((operation, backend), [])
-        if not durations:
+        records = self.records.get((operation, backend), [])
+        if not records:
             return None
+            
+        durations = [r["duration"] for r in records]
+        memory = [r["memory"] for r in records]
+        
         return {
-            'count': len(durations),
-            'total': sum(durations),
-            'avg': sum(durations) / len(durations),
-            'min': min(durations),
-            'max': max(durations)
+            "count": len(records),
+            "avg_time": np.mean(durations),
+            "min_time": min(durations),
+            "max_time": max(durations),
+            "avg_memory": np.mean(memory),
+            "flops": self.flop_counts.get((operation, backend), 0)
         }
     
     def reset(self):
         self.records.clear()
-
+        self.flop_counts.clear()
 
 # Global instance
 monitor = PerformanceMonitor()
 
-
 def timed_operation(func):
-    """Decorator for automatic performance monitoring"""
+    """Decorator with FLOP calculation"""
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
         result = func(*args, **kwargs)
@@ -49,6 +67,14 @@ def timed_operation(func):
                 backend = 'cuda'
                 break
         
-        monitor.record(operation, backend, duration)
+        # Calculate FLOPs if possible
+        flops = None
+        if operation == "matmul":
+            a, b = args[1], args[2]  # self, a, b
+            M, K = a.shape
+            _, N = b.shape
+            flops = 2 * M * N * K  # FLOP count for matmul
+        
+        monitor.record(operation, backend, duration, flops=flops)
         return result
     return wrapper
