@@ -8,16 +8,30 @@ import os
 from uhop.core.tensor import Tensor
 from uhop.core.tuner import kernel_tuner
 
-with open(os.path.join(os.path.dirname(__file__), '../kernels/matmul_kernel.cu'), 'r') as f:
-    kernel_code = f.read()
-mod = SourceModule(kernel_code)
-matmul_kernel = mod.get_function("matmul_kernel")
+class GlobalKernelTuner:
+    def __init__(self):
+        self.optimal_configs = {}
+    
+    def get_optimal_block_size(self, operation, a_shape, b_shape=None):
+        key = (operation, a_shape, b_shape)
+        return self.optimal_configs.get(key, 32)
 
-with open(os.path.join(os.path.dirname(__file__), '../kernels/relu_kernel.cu'), 'r') as f:
-    relu_kernel_code = f.read()
-relu_mod = SourceModule(relu_kernel_code)
+kernel_tuner = GlobalKernelTuner()
+
+
+def load_kernel(kernel_file):
+    kernel_path = os.path.join(os.path.dirname(__file__), '..', 'kernels', kernel_file)
+    with open(kernel_path, 'r') as f:
+        return f.read()
+
+matmul_mod = SourceModule(load_kernel('matmul_kernel.cu'))
+matmul_kernel = matmul_mod.get_function("matmul_kernel")
+
+relu_mod = SourceModule(load_kernel('relu_kernel.cu'))
 relu_kernel = relu_mod.get_function("relu_kernel")
 
+conv2d_mod = SourceModule(load_kernel('conv2d_kernel.cu'))
+conv2d_kernel = conv2d_mod.get_function("conv2d_kernel")   
 
 def matmul(a, b, block_size=None):
     if block_size is None:
