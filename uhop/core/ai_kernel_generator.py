@@ -427,12 +427,27 @@ class AIKernelGenerator:
             c_cpu = c_gpu.cpu().data
             ground_truth = self._compute_ground_truth(operation, a.data, b.data)
             error = np.max(np.abs(ground_truth - c_cpu))
+
+            if 'a_gpu' in locals():
+                a_gpu.data.gpudata.free()
+            if 'b_gpu' in locals():
+                b_gpu.data.gpudata.free()
+            if 'c_gpu' in locals():
+                c_gpu.data.gpudata.free()
             
             return np.median(times), kernel_filename, error
         
         except Exception as e:
-            print(f"Kernel evaluation failed: {str(e)}")
-            return float('inf'), kernel_filename, float('inf')
+            try:
+                if 'a_gpu' in locals():
+                    a_gpu.data.gpudata.free()
+                if 'b_gpu' in locals():
+                    b_gpu.data.gpudata.free()
+                if 'c_gpu' in locals():
+                    c_gpu.data.gpudata.free()
+            except:
+                pass
+            return float('inf'), None, float('inf')
 
     def _compute_ground_truth(self, operation, a, b):
         """Compute reference output for validation"""

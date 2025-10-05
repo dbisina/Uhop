@@ -25,6 +25,40 @@ class PerformanceMonitor:
                 self.flop_counts[(operation, backend)] = flops
                 
             self.records[(operation, backend)].append(record)
+
+    def record_hardware_metrics(self):
+        """Capture real-time hardware-specific performance counters."""
+        metrics = {}
+
+        try:
+            if self.backend == 'cuda':
+                import pycuda.driver as cuda
+                free_mem, total_mem = cuda.mem_get_info()
+                metrics['gpu_mem_used_mb'] = round((total_mem - free_mem) / 1024**2, 2)
+                metrics['gpu_mem_total_mb'] = round(total_mem / 1024**2, 2)
+                # Potential to add occupancy, GPU utilization, temperature via nvml
+
+            elif self.backend == 'rocm':
+                # Placeholder: ROCm metrics (e.g., rocminfo, rocprofiler)
+                metrics['gpu_mem_used_mb'] = None
+                metrics['gpu_mem_total_mb'] = None
+
+            elif self.backend == 'tpu':
+                # Future: TPU support (e.g., via cloud APIs or XLA hooks)
+                pass
+
+        except Exception as e:
+            metrics['gpu_error'] = str(e)
+
+        # Universal CPU & RAM metrics
+        try:
+            metrics['cpu_util_percent'] = psutil.cpu_percent(interval=None)
+            metrics['sys_mem_used_mb'] = round(psutil.virtual_memory().used / 1024**2, 2)
+            metrics['sys_mem_total_mb'] = round(psutil.virtual_memory().total / 1024**2, 2)
+        except Exception as e:
+            metrics['cpu_mem_error'] = str(e)
+
+        self.hardware_metrics.append(metrics)
     
     def get_stats(self, operation, backend):
         records = self.records.get((operation, backend), [])
@@ -67,13 +101,17 @@ def timed_operation(func):
                 backend = 'cuda'
                 break
         
-        # Calculate FLOPs if possible
+         # Safely calculate FLOPs
         flops = None
-        if operation == "matmul":
-            a, b = args[1], args[2]  # self, a, b
-            M, K = a.shape
-            _, N = b.shape
-            flops = 2 * M * N * K  # FLOP count for matmul
+        try:
+            if operation == "matmul" and len(args) >= 3:
+                a, b = args[1], args[2]  # self, a, b
+                if hasattr(a, 'shape') and hasattr(b, 'shape'):
+                    M, K = a.shape
+                    _, N = b.shape
+                    flops = 2 * M * N * K
+        except (IndexError, AttributeError, ValueError):
+            pass  # Skip FLOP calculation if shapes unavailable
         
         monitor.record(operation, backend, duration, flops=flops)
         return result

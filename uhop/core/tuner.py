@@ -12,11 +12,15 @@ class KernelTuner:
     def tune_matmul(self, a, b, block_sizes=[16, 32, 64]):
         try:
             """Auto-tune matrix multiplication kernel"""
-            from .executor import Executor
+            if self.backend == 'cuda':
+                from uhop.adapters import cuda_adapter
+                adapter = cuda_adapter
+            else:
+                from uhop.adapters import cpu_adapter
+                adapter = cpu_adapter
             
             # Warm-up run
-            executor = Executor(self.backend)
-            _ = executor.matmul(a, b)
+            _ = adapter.matmul(a, b)
             
             # Benchmark different block sizes
             best_time = float('inf')

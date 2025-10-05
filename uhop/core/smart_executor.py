@@ -2,8 +2,11 @@
 import os
 import json
 import time
+import hashlib
 import numpy as np
 from pathlib import Path
+from pycuda.compiler import SourceModule
+import pycuda.driver as cuda
 from uhop.core.tensor import Tensor
 from uhop.adapters import cuda_adapter, cpu_adapter
 from uhop.core.monitor import monitor, timed_operation
